@@ -1,0 +1,36 @@
+# Development version with hot reload
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies including dev tools
+RUN apt-get update && apt-get install -y \
+    gcc \
+    git \
+    curl \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
+# Copy application code
+COPY . .
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash discord-bot \
+    && chown -R discord-bot:discord-bot /app
+
+# Create directories
+RUN mkdir -p /app/logs /app/data \
+    && chown -R discord-bot:discord-bot /app/logs /app/data
+
+USER discord-bot
+
+# Set environment for development
+ENV DOCKER_ENV=true
+ENV PYTHONPATH=/app
+
+# Development command
+CMD ["python", "main.py"]

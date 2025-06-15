@@ -1,0 +1,59 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Development files
+.vscode/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+.venv/
+venv/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs (we'll mount these as volumes)
+logs/
+data/
+*.log
+
+# Development tools
+Dockerfile.dev
+docker-compose.dev.yml
+.coverage
+.pytest_cache
+
+# Scripts (except production ones)
+scripts/dev.sh
+scripts/dev.ps1
+scripts/test.sh
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# IDE files
+.idea/
+*.swp
+*.swo
+
+# Test files
+test_*.py
+*_test.py
+tests/
+
+# Requirements dev
+requirements-dev.txt

@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  discord-bot-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: infant-discord-bot-dev
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - CHANNEL_ID=${CHANNEL_ID}
+      - N8N_WEBHOOK=http://n8n-n8n-1:5678/webhook/discord-bot
+      - WEBHOOK_PORT=8003  # Different port for dev
+      - WEBHOOK_HOST=0.0.0.0
+      - LOG_LEVEL=DEBUG
+      - DOCKER_ENV=true
+      - PYTHONPATH=/app
+    ports:
+      - "8003:8003"  # Development port
+      - "5679:5678"  # Debug port
+    volumes:
+      - .:/app  # Mount source for hot reload
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - discord-bot-dev-network
+      - n8n_n8n-network
+    depends_on:
+      - discord-redis-dev
+    command: ["python", "main.py"]
+
+  discord-redis-dev:
+    image: redis:7-alpine
+    container_name: infant-discord-redis-dev
+    ports:
+      - "6383:6379"  # Development Redis port
+    networks:
+      - discord-bot-dev-network
+    volumes:
+      - discord_redis_dev_data:/data
+
+networks:
+  discord-bot-dev-network:
+    driver: bridge
+  n8n_n8n-network:
+    external: true
+
+volumes:
+  discord_redis_dev_data:

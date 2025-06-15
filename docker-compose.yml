@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  discord-bot:
+    build: .
+    container_name: infant-discord-bot
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - CHANNEL_ID=${CHANNEL_ID}
+      - N8N_WEBHOOK=http://n8n-n8n-1:5678/webhook/discord-bot  # Connect to existing n8n
+      - WEBHOOK_PORT=8002  # Use free port
+      - WEBHOOK_HOST=0.0.0.0
+      - LOG_LEVEL=INFO
+      - DOCKER_ENV=true
+      - REDIS_URL=redis://discord-redis:6379/0
+    ports:
+      - "8002:8002"  # Free port for webhook
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    networks:
+      - discord-bot-network
+      - n8n_n8n-network  # Connect to existing n8n network
+    depends_on:
+      - discord-redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  discord-redis:
+    image: redis:7-alpine
+    container_name: infant-discord-redis
+    restart: unless-stopped
+    volumes:
+      - discord_redis_data:/data
+    networks:
+      - discord-bot-network
+    ports:
+      - "6382:6379"  # Use free port to avoid conflicts
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Monitoring dashboard
+  bot-monitor:
+    image: grafana/grafana:latest
+    container_name: infant-bot-monitor
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    ports:
+      - "3001:3000"  # Free port for Grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+    networks:
+      - discord-bot-network
+    restart: unless-stopped
+    profiles:
+      - monitoring  # Optional service
+
+networks:
+  discord-bot-network:
+    driver: bridge
+  n8n_n8n-network:
+    external: true  # Connect to existing n8n network
+
+volumes:
+  discord_redis_data:
+  grafana_data:

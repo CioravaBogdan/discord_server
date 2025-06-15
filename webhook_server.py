@@ -40,20 +40,23 @@ def set_bot_instance(bot):
     global discord_bot
     discord_bot = bot
 
-@app.get("/")
-async def root():
-    """Health check endpoint"""
-    return {"status": "active", "message": "Discord Bot Webhook Server is running"}
-
+# Health check endpoint for Docker
 @app.get("/health")
 async def health_check():
-    """Detailed health check"""
-    bot_status = "connected" if discord_bot and discord_bot.client.is_ready() else "disconnected"
-    return {
-        "status": "healthy",
-        "bot_status": bot_status,
-        "webhook_server": "running"
-    }
+    """Health check endpoint for Docker containers"""
+    try:
+        # Check if bot is connected
+        bot_status = "connected" if discord_bot and discord_bot.client.is_ready() else "disconnected"
+        
+        return {
+            "status": "healthy",
+            "bot_status": bot_status,
+            "webhook_port": Config.WEBHOOK_PORT,
+            "docker_mode": Config.IS_DOCKER
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=500, detail="Health check failed")
 
 @app.post("/send-message")
 async def send_message(message: DiscordMessage, background_tasks: BackgroundTasks):
