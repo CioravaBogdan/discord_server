@@ -7,7 +7,7 @@ services:
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
       - CHANNEL_ID=${CHANNEL_ID}
-      - N8N_WEBHOOK=http://n8n-n8n-1:5678/webhook/discord-bot  # Connect to existing n8n
+      - N8N_WEBHOOK=${N8N_WEBHOOK}  # Use the webhook URL from .env file
       - WEBHOOK_PORT=8002  # Use free port
       - WEBHOOK_HOST=0.0.0.0
       - LOG_LEVEL=INFO
