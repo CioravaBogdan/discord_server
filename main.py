@@ -15,8 +15,8 @@ def run_webhook_in_thread():
     except Exception as e:
         logger.error(f"Eroare în serverul webhook: {e}")
 
-def main():
-    """Main function to run both bot and webhook server"""
+async def main():
+    """Main function that orchestrates the Discord bot and webhook server"""
     try:
         # Validate configuration
         Config.validate()
@@ -35,7 +35,7 @@ def main():
         
         # Run the Discord bot (this will block)
         logger.info("Pornesc bot-ul Discord...")
-        bot.run()
+        await bot.start()
         
     except KeyboardInterrupt:
         logger.info("Oprire prin Ctrl+C")
@@ -45,7 +45,7 @@ def main():
 
 if __name__ == "__main__":
     try:
-        main()
+        asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Program oprit de utilizator")
     except Exception as e:

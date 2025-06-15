@@ -2,15 +2,19 @@ import discord
 import requests
 import json
 import logging
-import asyncio
+from datetime import datetime
 from typing import Dict, Any
-from config import Config, setup_logging
+from config import Config
 
-# Setup logging
-logger = setup_logging()
+# Configurare logging
+logging.basicConfig(
+    level=getattr(logging, Config.LOG_LEVEL),
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 class DiscordBot:
-    """Discord bot that integrates with n8n via webhooks"""
+    """Discord bot for message monitoring and n8n webhook integration"""
     
     def __init__(self):
         # Validate configuration
@@ -39,7 +43,12 @@ class DiscordBot:
     
     async def handle_message(self, message: discord.Message):
         """Handle incoming Discord messages"""
-        # Skip messages from the bot itself
+        # ⭐ SOLUȚIA PRINCIPALĂ - Ignoră mesajele de la bot-uri
+        if message.author.bot:
+            logger.debug(f"Ignorat mesaj de la bot: {message.author.name}")
+            return
+            
+        # Skip messages from the bot itself (redundant but safe)
         if message.author == self.client.user:
             return
             
@@ -68,26 +77,30 @@ class DiscordBot:
             'author': {
                 'id': str(message.author.id),
                 'username': message.author.name,
-                'display_name': message.author.display_name,
-                'avatar_url': str(message.author.avatar.url) if message.author.avatar else None
+                'display_name': message.author.display_name or message.author.name,
+                'is_bot': message.author.bot  # ⭐ Adaugă flag pentru bot
             },
-            'guild': {
-                'id': str(message.guild.id),
-                'name': message.guild.name
-            } if message.guild else None,
-            'attachments': []
+            'attachments': [],
+            'guild': None
         }
         
-        # Process attachments
-        for attachment in message.attachments:
-            attachment_data = {
-                'url': attachment.url,
-                'filename': attachment.filename,
-                'content_type': attachment.content_type,
-                'size': attachment.size,
-                'spoiler': attachment.is_spoiler()
+        # Add attachments if present
+        if message.attachments:
+            data['attachments'] = [
+                {
+                    'url': att.url,
+                    'filename': att.filename,
+                    'content_type': att.content_type,
+                    'size': att.size
+                } for att in message.attachments
+            ]
+        
+        # Add guild info if available
+        if message.guild:
+            data['guild'] = {
+                'id': str(message.guild.id),
+                'name': message.guild.name
             }
-            data['attachments'].append(attachment_data)
         
         return data
     
@@ -97,50 +110,74 @@ class DiscordBot:
             response = requests.post(
                 Config.N8N_WEBHOOK,
                 json=data,
-                timeout=30,
+                timeout=10,
                 headers={'Content-Type': 'application/json'}
             )
             
             if response.status_code == 200:
-                logger.info(f"Trimis cu succes la n8n: {response.status_code}")
+                logger.info("✅ Mesaj trimis cu succes către n8n")
+            elif response.status_code == 404:
+                logger.warning("⚠️ Webhook-ul n8n nu este activ sau URL incorect")
             else:
-                logger.warning(f"Răspuns neașteptat de la n8n: {response.status_code}")
-                logger.warning(f"Răspuns: {response.text}")
+                logger.error(f"❌ n8n a răspuns cu status {response.status_code}: {response.text}")
                 
+        except requests.exceptions.Timeout:
+            logger.error("❌ Timeout la trimiterea către n8n (>10s)")
+        except requests.exceptions.ConnectionError:
+            logger.error("❌ Nu pot conecta la n8n - verifică dacă n8n rulează")
         except requests.exceptions.RequestException as e:
-            logger.error(f"Eroare la trimiterea către n8n: {e}")
-        except Exception as e:
-            logger.error(f"Eroare neașteptată: {e}")
+            logger.error(f"❌ Eroare la trimiterea către n8n: {str(e)}")
     
-    async def send_discord_message(self, channel_id: int, content: str, embeds: list = None):
-        """Send a message to Discord (used by webhook server)"""
+    async def send_discord_message(self, channel_id: int, content: str, embed_data: Dict[str, Any] = None) -> bool:
+        """Send message to Discord channel"""
         try:
             channel = self.client.get_channel(channel_id)
             if not channel:
-                logger.error(f"Canal cu ID {channel_id} nu a fost găsit")
+                logger.error(f"Nu găsesc canalul cu ID: {channel_id}")
                 return False
+            
+            # ⭐ Adaugă prefix pentru mesajele de la n8n pentru a le identifica
+            if not content.startswith("🤖"):
+                content = f"🤖 {content}"
+            
+            if embed_data:
+                embed = discord.Embed(**embed_data)
+                await channel.send(content=content, embed=embed)
+            else:
+                await channel.send(content)
                 
-            await channel.send(content=content, embeds=embeds)
-            logger.info(f"Mesaj trimis în canalul {channel.name}")
+            logger.info(f"✅ Mesaj trimis în #{channel.name}")
             return True
             
+        except discord.Forbidden:
+            logger.error(f"❌ Nu am permisiuni să trimit mesaje în canalul {channel_id}")
+            return False
+        except discord.HTTPException as e:
+            logger.error(f"❌ Eroare HTTP Discord: {str(e)}")
+            return False
         except Exception as e:
-            logger.error(f"Eroare la trimiterea mesajului Discord: {e}")
+            logger.error(f"❌ Eroare neașteptată: {str(e)}")
             return False
     
-    def run(self):
+    async def start(self):
         """Start the Discord bot"""
-        logger.info("Pornesc bot-ul Discord...")
-        self.client.run(Config.BOT_TOKEN)
-
-# Global bot instance for webhook server
-bot_instance = None
-
-def get_bot_instance():
-    """Get the global bot instance"""
-    return bot_instance
+        try:
+            logger.info("🚀 Pornesc Discord bot...")
+            await self.client.start(Config.BOT_TOKEN)
+        except discord.LoginFailure:
+            logger.error("❌ Token Discord invalid")
+            raise
+        except Exception as e:
+            logger.error(f"❌ Eroare la pornirea bot-ului: {str(e)}")
+            raise
 
 if __name__ == "__main__":
+    import asyncio
+    
     bot = DiscordBot()
-    bot_instance = bot
-    bot.run()
+    try:
+        asyncio.run(bot.start())
+    except KeyboardInterrupt:
+        logger.info("🛑 Bot oprit de utilizator")
+    except Exception as e:
+        logger.error(f"💥 Eroare critică: {str(e)}")
