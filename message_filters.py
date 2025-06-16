@@ -5,101 +5,161 @@ from typing import Dict, Any, List
 logger = logging.getLogger(__name__)
 
 class MessageFilter:
-    """Filtru pentru mesajele Discord pentru a preveni buclele"""
+    """Enhanced message filter to prevent loops and duplicates"""
     
-    def __init__(self):
-        # Prefixuri care indică mesaje de la bot-uri
-        self.bot_prefixes = ["🤖", "🚀", "⚡", "🔔", "📢"]
+    def __init__(self):        # Bot prefixes that indicate automated messages
+        self.bot_prefixes = [
+            "🤖🔒",  # Special anti-loop prefix for n8n messages
+            "🤖", "🚀", "⚡", "🔔", "📢", "🔥", "✨", "⭐", "💡",
+            "📊", "📈", "📋", "🎯", "🛠️", "⚙️", "🔧", "📦"
+        ]
         
-        # Nume de bot-uri cunoscute care ar trebui ignorate
+        # Known bot names that should be ignored
         self.known_bots = [
             "infant_products",
-            "INFANT.RO Bot", 
-            "MEE6",
-            "Carl-bot",
-            "Dyno",
-            "Mudae",
-            "Rythm"
+            "infant.ro bot", 
+            "mee6",
+            "carl-bot",
+            "dyno",
+            "rythm",
+            "groovy",
+            "dank memer",
+            "ticket tool",
+            "statbot"
+        ]
+          # Patterns that indicate automated/bot messages
+        self.bot_patterns = [
+            r"^🤖🔒.*",  # Special anti-loop pattern for n8n
+            r"^🤖.*",
+            r".*\(automated\).*",
+            r".*powered by.*ai.*",
+            r".*infant\.ro.*powered by.*",
+            r".*gemini ai.*",
+            r".*procesez.*fișier.*",
+            r".*analiză.*produs.*",
+            r".*cod produs.*",
+            r".*trimis de.*",
+            r".*status.*în procesare.*",
+            r".*video-uri.*imagini.*",
+            r"🔥.*a pornit procesarea.*",
+            r".*infant\.ro bot.*pornit.*"
         ]
         
-        # Pattern-uri de mesaje care ar trebui ignorate
-        self.ignore_patterns = [
-            r"^🤖.*",  # Mesaje care încep cu emoji de robot
-            r".*\(automated\).*",  # Mesaje cu tag automated
-            r".*powered by.*ai.*",  # Mesaje AI
-            r".*infant\.ro.*powered by.*",  # Mesaje specifice site-ului
-            r".*procesez.*fișiere.*",  # Mesaje de procesare
+        # Message content that indicates n8n generated content
+        self.n8n_indicators = [
+            "infant.ro - powered by",
+            "procesez",
+            "analiza produs", 
+            "gemini ai",
+            "cod produs",
+            "trimis de",
+            "imagini",
+            "video-uri",
+            "în procesare",
+            "a pornit procesarea"
         ]
-    
+
     def should_ignore_message(self, message_data: Dict[str, Any]) -> bool:
         """
-        Determină dacă un mesaj ar trebui ignorat
-        
-        Args:
-            message_data: Dicționar cu datele mesajului
-            
-        Returns:
-            True dacă mesajul ar trebui ignorat, False altfel
+        Enhanced filtering to prevent message loops
         """
+        content = message_data.get('content', '').lower().strip()
+        author = message_data.get('author', {})
+        author_name = author.get('username', '').lower()
+        display_name = author.get('display_name', '').lower()
+        is_bot = author.get('is_bot', False)
         
-        # 1. Ignoră mesajele de la bot-uri
-        if message_data.get('author', {}).get('is_bot', False):
-            logger.debug("Mesaj ignorat: provine de la bot")
+        # 1. ALWAYS ignore if author is marked as bot
+        if is_bot:
+            logger.debug(f"Ignored: Bot author detected - {author_name}")
             return True
         
-        # 2. Verifică numele autorului
-        author_name = message_data.get('author', {}).get('username', '')
-        if author_name.lower() in [bot.lower() for bot in self.known_bots]:
-            logger.debug(f"Mesaj ignorat: autor cunoscut ca bot - {author_name}")
-            return True
+        # 2. Check known bot names (case insensitive)
+        for bot_name in self.known_bots:
+            if bot_name in author_name or bot_name in display_name:
+                logger.debug(f"Ignored: Known bot name - {author_name}")
+                return True
         
-        # 3. Verifică prefixurile bot
-        content = message_data.get('content', '')
+        # 3. Check bot prefixes
         for prefix in self.bot_prefixes:
-            if content.startswith(prefix):
-                logger.debug(f"Mesaj ignorat: prefix bot detectat - {prefix}")
+            if content.startswith(prefix.lower()):
+                logger.debug(f"Ignored: Bot prefix detected - {prefix}")
                 return True
         
-        # 4. Verifică pattern-urile
-        for pattern in self.ignore_patterns:
-            if re.search(pattern, content, re.IGNORECASE):
-                logger.debug(f"Mesaj ignorat: pattern detectat - {pattern}")
+        # 4. Check automated message patterns
+        for pattern in self.bot_patterns:
+            if re.search(pattern, content, re.IGNORECASE | re.MULTILINE):
+                logger.debug(f"Ignored: Bot pattern matched - {pattern}")
                 return True
         
-        # 5. Verifică dacă mesajul vine din n8n (are anumite caracteristici)
-        if self._is_n8n_message(message_data):
-            logger.debug("Mesaj ignorat: provine din n8n")
+        # 5. Check n8n specific indicators
+        for indicator in self.n8n_indicators:
+            if indicator.lower() in content:
+                logger.debug(f"Ignored: n8n indicator found - {indicator}")
+                return True
+        
+        # 6. Check if message looks like a repeated/duplicate message
+        if self._is_duplicate_pattern(content):
+            logger.debug(f"Ignored: Duplicate pattern detected")
+            return True
+          # 7. Check webhook/system message characteristics
+        if self._is_system_message(message_data):
+            logger.debug(f"Ignored: System message detected")
             return True
             
         return False
     
-    def _is_n8n_message(self, message_data: Dict[str, Any]) -> bool:
-        """Detectează mesajele care provin din n8n"""
-        content = message_data.get('content', '').lower()
-        
-        # Indicatori că mesajul vine din n8n
-        n8n_indicators = [
-            'powered by ai',
-            'infant.ro - powered by',
-            'procesez',
-            'analiza produs',
-            'gemini ai',
-            'analiza ai',
-            'fișiere pentru analiza ai'
+    def _is_duplicate_pattern(self, content: str) -> bool:
+        """Check if message looks like a duplicate/repeated message"""
+        duplicate_patterns = [
+            r"(\b\w{3,}\b)\s+\1",  # Repeated words (3+ chars)
+            r"^(.{10,})\s+\1",  # Repeated longer phrases (10+ chars)
+            r"^(.{1,5})\1{4,}",  # Repeated short sequences (4+ times)
         ]
         
-        return any(indicator in content for indicator in n8n_indicators)
+        for pattern in duplicate_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                return True
+        return False
     
+    def _is_system_message(self, message_data: Dict[str, Any]) -> bool:
+        """Check if message has system/webhook characteristics"""
+        
+        # Check message structure for webhook indicators
+        content = message_data.get('content', '')
+        
+        # Messages with structured data (likely from webhooks)
+        structured_indicators = [
+            'timestamp',
+            'message_id', 
+            'channel_id',
+            'user_id',
+            '{"',
+            'http://',
+            'https://',
+            'webhook'
+        ]
+        
+        content_lower = content.lower()
+        webhook_indicator_count = sum(1 for indicator in structured_indicators if indicator in content_lower)
+        
+        # If multiple webhook indicators, likely a system message
+        if webhook_indicator_count >= 2:
+            return True
+            
+        return False
+
     def add_bot_identifier(self, content: str) -> str:
-        """Adaugă identificator că mesajul vine de la bot"""
-        if not content.startswith("🤖"):
+        """Add bot identifier to outgoing messages"""
+        if not any(content.startswith(prefix) for prefix in self.bot_prefixes):
             return f"🤖 {content}"
         return content
-    
+
     def get_stats(self) -> Dict[str, int]:
-        """Returnează statistici despre filtrare"""
+        """Get filtering statistics"""
         return {
             'bot_prefixes_count': len(self.bot_prefixes),
             'known_bots_count': len(self.known_bots),
-            'ignore_patterns_count': len(self.ignore_patterns)
+            'bot_patterns_count': len(self.bot_patterns),
+            'n8n_indicators_count': len(self.n8n_indicators)
         }

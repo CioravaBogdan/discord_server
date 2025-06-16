@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
 import asyncio
 import logging
@@ -59,12 +59,24 @@ async def health_check():
         raise HTTPException(status_code=500, detail="Health check failed")
 
 @app.post("/send-message")
-async def send_message(message: DiscordMessage, background_tasks: BackgroundTasks):
+async def send_message(request: Request, message: DiscordMessage, background_tasks: BackgroundTasks):
     """Send a message to Discord via webhook from n8n"""
     if not discord_bot:
         raise HTTPException(status_code=503, detail="Discord bot not available")
     
+    # Check if message comes from n8n automation
+    source = request.headers.get("X-Source", "").lower()
+    is_n8n_automation = source == "n8n-automation"
+    
     logger.info(f"Webhook primit pentru canalul {message.channel_id}: {message.content[:50]}...")
+    if is_n8n_automation:
+        logger.info("🤖 Mesaj detectat ca fiind de la n8n automation")
+    
+    # Add special prefix for n8n messages to prevent re-processing
+    content = message.content
+    if is_n8n_automation and not content.startswith("🤖🔒"):
+        content = f"🤖🔒 {content}"
+        logger.info("🔒 Adăugat prefix anti-buclă pentru mesaj n8n")
     
     # Process embeds if provided
     discord_embeds = None
@@ -102,13 +114,12 @@ async def send_message(message: DiscordMessage, background_tasks: BackgroundTask
         channel = discord_bot.client.get_channel(message.channel_id)
         if not channel:
             raise HTTPException(status_code=404, detail=f"Channel with ID {message.channel_id} not found")
-        
-        # Create the message coroutine and run it in the Discord event loop
+          # Create the message coroutine and run it in the Discord event loop
         loop = discord_bot.client.loop
         if loop and loop.is_running():
             # Use asyncio to schedule the task in the bot's event loop
             future = asyncio.run_coroutine_threadsafe(
-                channel.send(content=message.content, embeds=discord_embeds),
+                channel.send(content=content, embeds=discord_embeds),
                 loop
             )
             # Wait for the result with a timeout
@@ -123,9 +134,16 @@ async def send_message(message: DiscordMessage, background_tasks: BackgroundTask
         raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
 
 @app.post("/webhook/n8n")
-async def n8n_webhook(data: Dict[str, Any]):
+async def n8n_webhook(request: Request, data: Dict[str, Any]):
     """Generic webhook endpoint for n8n to send data"""
+    
+    # Check if request comes from n8n automation
+    source = request.headers.get("X-Source", "").lower()
+    is_n8n_automation = source == "n8n-automation"
+    
     logger.info(f"Date primite de la n8n: {data}")
+    if is_n8n_automation:
+        logger.info("🤖 Request identificat ca fiind de la n8n automation")
     
     # Process the data from n8n
     # This can be customized based on your n8n workflow needs
@@ -142,13 +160,18 @@ async def n8n_webhook(data: Dict[str, Any]):
             if not channel_id:
                 raise HTTPException(status_code=400, detail="channel_id is required")
             
+            # Add anti-loop prefix for n8n automation messages
+            if is_n8n_automation and not content.startswith("🤖🔒"):
+                content = f"🤖🔒 {content}"
+                logger.info("🔒 Adăugat prefix anti-buclă pentru mesaj n8n")
+            
             message = DiscordMessage(
                 channel_id=channel_id,
                 content=content,
                 embeds=embeds
             )
             
-            return await send_message(message, BackgroundTasks())
+            return await send_message(request, message, BackgroundTasks())
     
     return {"status": "received", "data": data}
 

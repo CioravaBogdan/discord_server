@@ -21,11 +21,18 @@ def test_message_filtering():
                 'author': {'username': 'infant_products', 'is_bot': True}
             },
             'should_ignore': True
-        },
-        {
+        },        {
             'name': 'Mesaj cu prefix bot',
             'data': {
                 'content': '🤖 Răspuns automat din n8n',
+                'author': {'username': 'user123', 'is_bot': False}
+            },
+            'should_ignore': True
+        },
+        {
+            'name': 'Mesaj cu prefix anti-buclă n8n',
+            'data': {
+                'content': '🤖🔒 Răspuns automat din n8n pentru a preveni bucla',
                 'author': {'username': 'user123', 'is_bot': False}
             },
             'should_ignore': True
@@ -84,7 +91,6 @@ def test_message_filtering():
         print(f"   📊 Expected: {'Ignore' if test['should_ignore'] else 'Process'}")
         print(f"   📊 Got: {'Ignore' if result else 'Process'}")
         print()
-    
     print("=" * 60)
     print(f"📈 Rezultate: {passed_tests}/{total_tests} teste trecute")
     
@@ -93,14 +99,16 @@ def test_message_filtering():
     print(f"📊 Statistici filtru:")
     print(f"   • Prefixuri bot: {stats['bot_prefixes_count']}")
     print(f"   • Bot-uri cunoscute: {stats['known_bots_count']}")
-    print(f"   • Pattern-uri ignore: {stats['ignore_patterns_count']}")
+    print(f"   • Pattern-uri bot: {stats['bot_patterns_count']}")
+    print(f"   • Indicatori n8n: {stats['n8n_indicators_count']}")
     
     if passed_tests == total_tests:
         print("\n🎉 Toate testele au trecut! Filtrarea funcționează corect.")
-        return True
     else:
         print(f"\n⚠️ {total_tests - passed_tests} teste au eșuat. Verifică configurația.")
-        return False
+    
+    # Use pytest assertion
+    assert passed_tests == total_tests, f"Only {passed_tests}/{total_tests} tests passed"
 
 if __name__ == "__main__":
     test_message_filtering()
