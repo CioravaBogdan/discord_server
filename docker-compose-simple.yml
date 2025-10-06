@@ -1,17 +1,16 @@
 services:
-  # Discord bot application (connects to external n8n webhook)
+  # Discord bot application (uses existing n8n instance)
   discord-bot:
     build: .
     container_name: infant-discord-bot
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
       - CHANNEL_ID=${CHANNEL_ID}
-      - N8N_WEBHOOK=https://n8n.byinfant.com/webhook/infant-discord-webhook
-      - WEBHOOK_PORT=8000
+      - N8N_WEBHOOK=http://host.docker.internal:5678/webhook/infant-discord-webhook
       - WEBHOOK_HOST=0.0.0.0
+      - WEBHOOK_PORT=8000
       - LOG_LEVEL=INFO
       - DOCKER_ENV=true
-      - REDIS_URL=redis://redis:6379/0
     ports:
       - "8000:8000"  # Webhook server port
     volumes:
@@ -20,32 +19,14 @@ services:
     restart: unless-stopped
     networks:
       - bot-network
-    depends_on:
-      - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-
-  # Redis for caching
-  redis:
-    image: redis:7-alpine
-    container_name: infant-redis
-    ports:
-      - "6380:6379"  # Use different external port
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-    networks:
-      - bot-network
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 volumes:
   redis_data:

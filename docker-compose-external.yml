@@ -1,5 +1,5 @@
 services:
-  # Discord bot application (connects to external n8n webhook)
+  # Discord bot application - standalone version with external n8n
   discord-bot:
     build: .
     container_name: infant-discord-bot

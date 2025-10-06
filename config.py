@@ -18,7 +18,7 @@ class Config:
     
     # Webhook server settings - Docker compatible
     WEBHOOK_HOST = os.getenv('WEBHOOK_HOST', '0.0.0.0')
-    WEBHOOK_PORT = int(os.getenv('WEBHOOK_PORT', '8002'))  # New default port
+    WEBHOOK_PORT = int(os.getenv('WEBHOOK_PORT', '8000'))  # Updated default port
     
     # Redis Configuration (for Docker)
     REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')

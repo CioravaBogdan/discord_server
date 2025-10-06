@@ -28,15 +28,17 @@ RUN mkdir -p /app/logs /app/data \
 
 USER discord-bot
 
-# Health check - using different port to avoid conflicts
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8002/health || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Expose webhook port (8002 to avoid conflicts)
-EXPOSE 8002
+# Expose webhook port
+EXPOSE 8000
 
 # Set environment variable for Docker
 ENV DOCKER_ENV=true
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
 # Run the application
 CMD ["python", "main.py"]
